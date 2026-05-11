@@ -549,7 +549,18 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True,
     key=uploader_key,
 )
-
+st.markdown(
+    """
+    <div class="glass-card-compact" style="margin-top:0.75rem;margin-bottom:1rem;">
+        <div style="font-size:0.95rem;font-weight:800;margin-bottom:0.25rem;">
+            📌 Multiple File Upload Tip
+        </div>
+        <div class="small-note" style="line-height:1.65;">
+            To upload multiple files, click <b>Upload</b> and select more than one document at the same time, or Select a file and do Ctrl+A to upload all files in the folder.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ---------------- PROCESS FILES ----------------
 if uploaded_files:
