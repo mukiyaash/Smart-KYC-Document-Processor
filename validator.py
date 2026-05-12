@@ -2,6 +2,8 @@ import re
 import pandas as pd
 
 
+META_COLUMNS = ["DOC_NUMBER", "SOURCE_FILE"]
+
 BASE_COLUMNS = ["NAMES", "DATE_OF_BIRTH", "LOCATION", "ID_NUMBER"]
 
 VALIDATION_COLUMNS = [
@@ -13,7 +15,7 @@ VALIDATION_COLUMNS = [
     "REVIEW_REQUIRED",
 ]
 
-FINAL_COLUMNS = BASE_COLUMNS + VALIDATION_COLUMNS
+FINAL_COLUMNS = META_COLUMNS + BASE_COLUMNS + VALIDATION_COLUMNS
 
 
 def is_missing(value):
@@ -183,9 +185,13 @@ def validate_id_number(id_number):
 def validate_kyc_record(record):
     """
     Adds validation status columns to one extracted KYC record.
+    Also preserves document number and source file name.
     """
 
     fixed = {}
+
+    fixed["DOC_NUMBER"] = clean_text(record.get("DOC_NUMBER", "Not Found"))
+    fixed["SOURCE_FILE"] = clean_text(record.get("SOURCE_FILE", "Not Found"))
 
     for col in BASE_COLUMNS:
         fixed[col] = clean_text(record.get(col, "Not Found"))

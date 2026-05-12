@@ -62,25 +62,19 @@ def extract_single_via_api(uploaded_file, mode="Balanced"):
 
 def extract_batch_via_api(uploaded_files, mode="Balanced"):
     """
-    Sends Streamlit uploaded files to FastAPI /extract-batch endpoint.
+    Sends any number of Streamlit uploaded files to FastAPI /extract-batch endpoint.
 
-    This matches the Swagger-friendly API route:
-        file_1, file_2, file_3 ... file_10
-
-    Maximum files sent in one API request: 10
+    This version supports n files in one batch.
     """
 
     files_payload = []
 
-    for index, file in enumerate(uploaded_files, start=1):
-        if index > 10:
-            break
-
+    for file in uploaded_files:
         file_bytes = file.getvalue()
 
         files_payload.append(
             (
-                f"file_{index}",
+                "files",
                 (
                     file.name,
                     file_bytes,
@@ -99,7 +93,7 @@ def extract_batch_via_api(uploaded_files, mode="Balanced"):
             f"{API_BASE_URL}/extract-batch",
             params={"mode": mode},
             files=files_payload,
-            timeout=300,
+            timeout=600,
         )
 
         if response.status_code != 200:

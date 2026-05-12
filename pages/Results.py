@@ -6,17 +6,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from streamlit_extras.let_it_rain import rain
-from UI import (
-    init_theme,
-    inject_base_css,
-    load_lottie_url,
-    notification_bar,
-    render_lottie,
-    render_top_nav,
-    build_sidebar,
-    render_progress_card,
-    render_empty_state,
-)
+
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -44,6 +34,8 @@ from UI import (
     render_lottie,
     render_top_nav,
     build_sidebar,
+    render_progress_card,
+    render_empty_state,
 )
 
 st.set_page_config(page_title="Results", layout="wide", initial_sidebar_state="expanded")
@@ -98,9 +90,16 @@ def clean_results_dataframe(df):
 
     fixed_df = df.copy()
 
-    base_cols = ["NAMES", "DATE_OF_BIRTH", "LOCATION", "ID_NUMBER"]
+    required_cols = [
+        "DOC_NUMBER",
+        "SOURCE_FILE",
+        "NAMES",
+        "DATE_OF_BIRTH",
+        "LOCATION",
+        "ID_NUMBER",
+    ]
 
-    for col in base_cols:
+    for col in required_cols:
         if col not in fixed_df.columns:
             fixed_df[col] = "Not Found"
 
@@ -151,10 +150,6 @@ def get_review_note(review_required):
 
 
 def generate_enriched_profile_pdf(profile_row, profile_index):
-    """
-    Generates a PDF report for the selected enriched KYC profile.
-    Returns PDF bytes.
-    """
     buffer = io.BytesIO()
 
     doc = SimpleDocTemplate(
@@ -203,6 +198,8 @@ def generate_enriched_profile_pdf(profile_row, profile_index):
         textColor=colors.HexColor("#64748b"),
     )
 
+    doc_number = safe_value(profile_row.get("DOC_NUMBER", "Not Found"))
+    source_file = safe_value(profile_row.get("SOURCE_FILE", "Not Found"))
     name = safe_value(profile_row.get("NAMES", "Not Found"))
     dob = safe_value(profile_row.get("DATE_OF_BIRTH", "Not Found"))
     location = safe_value(profile_row.get("LOCATION", "Not Found"))
@@ -230,6 +227,8 @@ def generate_enriched_profile_pdf(profile_row, profile_index):
     elements.append(Spacer(1, 0.2 * inch))
 
     summary_data = [
+        ["Document Number", doc_number],
+        ["Source File", source_file],
         ["Profile ID", f"KYC-{profile_index + 1:04d}"],
         ["Customer Name", name],
         ["KYC Status", overall_status],
@@ -321,6 +320,8 @@ def generate_enriched_profile_pdf(profile_row, profile_index):
 
 
 def render_enriched_profile(profile_row, profile_index):
+    doc_number = safe_value(profile_row.get("DOC_NUMBER", "Not Found"))
+    source_file = safe_value(profile_row.get("SOURCE_FILE", "Not Found"))
     name = safe_value(profile_row.get("NAMES", "Not Found"))
     dob = safe_value(profile_row.get("DATE_OF_BIRTH", "Not Found"))
     location = safe_value(profile_row.get("LOCATION", "Not Found"))
@@ -347,7 +348,8 @@ def render_enriched_profile(profile_row, profile_index):
                 <div class="pill">🏦 AI-Enriched Customer Profile</div>
                 <div class="page-title" style="font-size:2rem;">{name}</div>
                 <div class="page-sub">
-                    This profile is generated from extracted KYC document fields and validation results.
+                    Document Number: <b>{doc_number}</b><br>
+                    Source File: <b>{source_file}</b>
                 </div>
             </div>
             """,
@@ -362,6 +364,7 @@ def render_enriched_profile(profile_row, profile_index):
                 <div style="font-size:1.15rem;font-weight:800;margin-bottom:0.5rem;">{profile_badge}</div>
                 <div class="small-note" style="line-height:1.8;">
                     <b>Record ID:</b> KYC-{profile_index + 1:04d}<br>
+                    <b>Document No:</b> {doc_number}<br>
                     <b>Overall Status:</b> {overall_status}<br>
                     <b>Review Required:</b> {review_required}
                 </div>
@@ -460,6 +463,8 @@ st.session_state.kyc_results_df = df.copy()
 
 # ---------------- TABLE VIEWS ----------------
 OUTPUT_COLUMNS = [
+    "DOC_NUMBER",
+    "SOURCE_FILE",
     "NAMES",
     "DATE_OF_BIRTH",
     "LOCATION",
@@ -467,6 +472,8 @@ OUTPUT_COLUMNS = [
 ]
 
 VALIDATION_COLUMNS_DISPLAY = [
+    "DOC_NUMBER",
+    "SOURCE_FILE",
     "NAME_STATUS",
     "DOB_STATUS",
     "LOCATION_STATUS",
@@ -538,6 +545,7 @@ else:
     with k4:
         render_metric("🪪 ID Number", id_count)
 
+    # ---------------- FIELD COVERAGE ----------------
     st.markdown("<div class='section-head'>Field Coverage</div>", unsafe_allow_html=True)
 
     p1, p2, p3, p4 = st.columns(4, gap="large")
@@ -553,6 +561,7 @@ else:
 
     with p4:
         render_progress_card("ID Coverage", id_count, len(df))
+
     # ---------------- MAIN OUTPUT TABLE ----------------
     st.markdown("<div class='section-head'>Structured KYC Output</div>", unsafe_allow_html=True)
 
@@ -563,9 +572,10 @@ else:
     profile_options = []
 
     for idx, row in df.iterrows():
+        doc_number = safe_value(row.get("DOC_NUMBER", "Not Found"))
         customer_name = safe_value(row.get("NAMES", "Not Found"))
         id_value = safe_value(row.get("ID_NUMBER", "Not Found"))
-        profile_options.append(f"KYC-{idx + 1:04d} | {customer_name} | {id_value}")
+        profile_options.append(f"{doc_number} | KYC-{idx + 1:04d} | {customer_name} | {id_value}")
 
     selected_profile_label = st.selectbox(
         "Select record to view enriched KYC profile",
@@ -626,6 +636,7 @@ else:
                 <div style="font-size:1.1rem;font-weight:800;">⚠️ Records Needing Review</div>
                 <div class="small-note" style="margin-top:0.4rem;">
                     {len(review_df)} records need manual checking before final use.
+                    The document number and source file are shown in the validation table.
                 </div>
             </div>
             """,
@@ -637,7 +648,7 @@ else:
             st.dataframe(valid_output_df, use_container_width=True, hide_index=True)
 
     if not review_validation_df.empty:
-        with st.expander("⚠️ View validation issues"):
+        with st.expander("⚠️ View validation issues with document numbers"):
             st.dataframe(review_validation_df, use_container_width=True, hide_index=True)
 
     # ---------------- DOWNLOADS ----------------

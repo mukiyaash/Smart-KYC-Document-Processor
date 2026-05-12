@@ -519,43 +519,14 @@ async def extract_single_file(
 @app.post("/extract-batch")
 async def extract_batch_files(
     mode: str = "Balanced",
-    file_1: UploadFile = File(..., description="Upload KYC file 1"),
-    file_2: Optional[UploadFile] = File(None, description="Upload KYC file 2"),
-    file_3: Optional[UploadFile] = File(None, description="Upload KYC file 3"),
-    file_4: Optional[UploadFile] = File(None, description="Upload KYC file 4"),
-    file_5: Optional[UploadFile] = File(None, description="Upload KYC file 5"),
-    file_6: Optional[UploadFile] = File(None, description="Upload KYC file 6"),
-    file_7: Optional[UploadFile] = File(None, description="Upload KYC file 7"),
-    file_8: Optional[UploadFile] = File(None, description="Upload KYC file 8"),
-    file_9: Optional[UploadFile] = File(None, description="Upload KYC file 9"),
-    file_10: Optional[UploadFile] = File(None, description="Upload KYC file 10"),
+    files: List[UploadFile] = File(..., description="Upload one or more KYC files"),
 ):
     """
-    Upload multiple KYC files and get combined extraction + validation output.
+    Upload any number of KYC files and get combined extraction + validation output.
 
-    Swagger-friendly version:
-    - Shows separate file upload buttons.
-    - Avoids List[UploadFile] rendering as string inputs.
+    This version supports n files in a batch.
     """
-    uploaded_files = [
-        file_1,
-        file_2,
-        file_3,
-        file_4,
-        file_5,
-        file_6,
-        file_7,
-        file_8,
-        file_9,
-        file_10,
-    ]
-
-    uploaded_files = [
-        f for f in uploaded_files
-        if f is not None and f.filename is not None and f.filename.strip() != ""
-    ]
-
-    if not uploaded_files:
+    if not files:
         raise HTTPException(status_code=400, detail="No files uploaded.")
 
     mode = normalize_mode(mode)
@@ -563,7 +534,10 @@ async def extract_batch_files(
     all_results = []
     file_level_results = []
 
-    for uploaded_file in uploaded_files:
+    for uploaded_file in files:
+        if uploaded_file is None or uploaded_file.filename is None or uploaded_file.filename.strip() == "":
+            continue
+
         if not allowed_file(uploaded_file.filename):
             file_level_results.append(
                 {
@@ -638,7 +612,7 @@ async def extract_batch_files(
     return {
         "status": "completed",
         "mode": mode,
-        "uploaded_files": len(uploaded_files),
+        "uploaded_files": len(files),
         "processed_records": len(all_results),
         "summary": build_summary(all_results),
         "files": file_level_results,

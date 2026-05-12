@@ -35,7 +35,6 @@ init_theme()
 inject_base_css(show_sidebar=True)
 require_login()
 
-# API status must be checked before sidebar so sidebar can show backend status
 api_ok, api_status = check_api_health()
 
 render_top_nav("Upload & Process")
@@ -270,7 +269,8 @@ def build_doc_records_from_api_response(api_response, uploaded_files):
 
     files_response = api_response.get("files", [])
 
-    for item in files_response:
+    for doc_index, item in enumerate(files_response, start=1):
+        doc_number = f"DOC-{doc_index:03d}"
         file_name = item.get("file_name", "Unknown File")
         file = file_lookup.get(file_name)
 
@@ -286,6 +286,8 @@ def build_doc_records_from_api_response(api_response, uploaded_files):
 
         if item.get("status") != "success":
             failed_schema = {
+                "DOC_NUMBER": doc_number,
+                "SOURCE_FILE": file_name,
                 "NAMES": "Not Found",
                 "DATE_OF_BIRTH": "Not Found",
                 "LOCATION": "Not Found",
@@ -319,9 +321,14 @@ def build_doc_records_from_api_response(api_response, uploaded_files):
 
         if file_type == "excel":
             rows = item.get("results", [])
+            updated_rows = []
 
-            for row in rows:
+            for row_index, row in enumerate(rows, start=1):
+                row = dict(row)
+                row["DOC_NUMBER"] = f"{doc_number}-R{row_index:03d}"
+                row["SOURCE_FILE"] = file_name
                 final_rows.append(row)
+                updated_rows.append(row)
 
             doc_records.append(
                 {
@@ -331,13 +338,18 @@ def build_doc_records_from_api_response(api_response, uploaded_files):
                     "preview_data": preview_info["preview_data"],
                     "preview_df": preview_info["preview_df"],
                     "preview_error": preview_info["preview_error"],
-                    "ocr_text": json.dumps(rows, indent=2),
-                    "schema": rows,
+                    "ocr_text": json.dumps(updated_rows, indent=2),
+                    "schema": updated_rows,
                 }
             )
 
         else:
             schema = item.get("extracted_schema", {})
+            schema = dict(schema)
+
+            schema["DOC_NUMBER"] = doc_number
+            schema["SOURCE_FILE"] = file_name
+
             final_rows.append(schema)
 
             doc_records.append(
@@ -549,6 +561,7 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True,
     key=uploader_key,
 )
+
 st.markdown(
     """
     <div class="glass-card-compact" style="margin-top:0.75rem;margin-bottom:1rem;">
@@ -556,11 +569,14 @@ st.markdown(
             📌 Multiple File Upload Tip
         </div>
         <div class="small-note" style="line-height:1.65;">
-            To upload multiple files, click <b>Upload</b> and select more than one document at the same time, or Select a file and do Ctrl+A to upload all files in the folder.
+            To upload multiple files, click <b>Upload</b> and select more than one document at the same time,
+            or drag and drop multiple KYC files into the upload box.
+        </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
+
 
 # ---------------- PROCESS FILES ----------------
 if uploaded_files:
