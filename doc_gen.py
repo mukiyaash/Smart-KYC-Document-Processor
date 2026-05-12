@@ -21,6 +21,7 @@ SEED = 42
 
 random.seed(SEED)
 
+
 # ---------------- HELPERS ----------------
 def ensure_dirs():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -28,59 +29,81 @@ def ensure_dirs():
     os.makedirs(PASSPORT_DIR, exist_ok=True)
     os.makedirs(EXCEL_DIR, exist_ok=True)
 
+
 def load_dataset():
     if os.path.exists(INPUT_XLSX):
         return pd.read_excel(INPUT_XLSX, engine="openpyxl")
+
     if os.path.exists(INPUT_CSV):
         return pd.read_csv(INPUT_CSV)
+
     raise FileNotFoundError(
         "No synthetic dataset found. Make sure synthetic_outputs/synthetic_kyc_data.xlsx "
         "or synthetic_outputs/synthetic_kyc_data.csv exists."
     )
+
 
 def get_font(size=32, bold=False):
     font_candidates = [
         "arialbd.ttf" if bold else "arial.ttf",
         "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf",
     ]
+
     for font_name in font_candidates:
         try:
             return ImageFont.truetype(font_name, size)
         except Exception:
             continue
+
     return ImageFont.load_default()
+
 
 def draw_wrapped_text(draw, text, x, y, font, max_width, fill="black", line_spacing=10):
     lines = []
+
     for paragraph in str(text).split("\n"):
         wrapped = textwrap.wrap(paragraph, width=40)
+
         if not wrapped:
             lines.append("")
         else:
             lines.extend(wrapped)
 
     current_y = y
+
     for line in lines:
         draw.text((x, current_y), line, font=font, fill=fill)
         bbox = draw.textbbox((x, current_y), line, font=font)
         line_height = bbox[3] - bbox[1]
         current_y += line_height + line_spacing
+
     return current_y
+
 
 def safe_text(value):
     if pd.isna(value):
         return ""
+
     return str(value).strip()
+
 
 # ---------------- IMAGE GENERATORS ----------------
 def create_aadhaar_like_image(row, output_path):
+    """
+    Creates an Aadhaar-like synthetic document image.
+
+    Fix added:
+    - ID number is placed clearly above footer.
+    - Footer moved lower.
+    - Prevents OCR from merging ID number with "Synthetic Aadhaar-like test document".
+    """
     img = Image.new("RGB", (IMAGE_WIDTH, IMAGE_HEIGHT), color=BG_COLOR)
     draw = ImageDraw.Draw(img)
 
     title_font = get_font(40, bold=True)
     header_font = get_font(28, bold=True)
     body_font = get_font(30, bold=False)
-    small_font = get_font(24, bold=False)
+    small_font = get_font(22, bold=False)
 
     # Header
     draw.rectangle([(20, 20), (1180, 120)], outline="black", width=3)
@@ -93,31 +116,42 @@ def create_aadhaar_like_image(row, output_path):
 
     # Text block
     x0 = 320
-    y = 180
+    y = 170
+
     draw.text((x0, y), safe_text(row["NAME_LABEL"]) + ":", font=header_font, fill=TEXT_COLOR)
-    y += 50
+    y += 46
     draw.text((x0, y), safe_text(row["NAMES"]), font=body_font, fill=TEXT_COLOR)
 
-    y += 80
+    y += 72
     draw.text((x0, y), safe_text(row["DOB_LABEL"]) + ":", font=header_font, fill=TEXT_COLOR)
-    y += 50
+    y += 46
     draw.text((x0, y), safe_text(row["DATE_OF_BIRTH"]), font=body_font, fill=TEXT_COLOR)
 
-    y += 80
+    y += 72
     draw.text((x0, y), safe_text(row["LOCATION_LABEL"]) + ":", font=header_font, fill=TEXT_COLOR)
-    y += 50
+    y += 46
     draw.text((x0, y), safe_text(row["LOCATION"]), font=body_font, fill=TEXT_COLOR)
 
-    y += 80
+    y += 72
     draw.text((x0, y), safe_text(row["ID_LABEL"]) + ":", font=header_font, fill=TEXT_COLOR)
-    y += 50
-    draw.text((x0, y), safe_text(row["ID_NUMBER"]), font=body_font, fill=TEXT_COLOR)
+    y += 46
 
-    # Footer
-    draw.line((40, 600, 1160, 600), fill="black", width=2)
-    draw.text((40, 620), "Synthetic Aadhaar-like test document", font=small_font, fill="gray")
+    # ID number clearly separated from footer
+    id_number = safe_text(row["ID_NUMBER"])
+    draw.text((x0, y), id_number, font=body_font, fill=TEXT_COLOR)
+
+    # Footer moved lower to avoid overlap with ID number
+    footer_y = 635
+    draw.line((40, footer_y, 1160, footer_y), fill="black", width=2)
+    draw.text(
+        (40, footer_y + 18),
+        "Synthetic Aadhaar-like test document",
+        font=small_font,
+        fill="gray"
+    )
 
     img.save(output_path)
+
 
 def create_passport_like_image(row, output_path):
     img = Image.new("RGB", (IMAGE_WIDTH, IMAGE_HEIGHT), color=(245, 245, 250))
@@ -143,9 +177,15 @@ def create_passport_like_image(row, output_path):
     left_x = 50
     y = 160
 
+    full_name = safe_text(row["NAMES"])
+    name_parts = full_name.split()
+
+    surname = name_parts[-1] if name_parts else ""
+    given_name = " ".join(name_parts[:-1]) if len(name_parts) > 1 else full_name
+
     fields = [
-        ("Surname", safe_text(row["NAMES"]).split()[-1] if safe_text(row["NAMES"]) else ""),
-        ("Given Name", " ".join(safe_text(row["NAMES"]).split()[:-1]) if len(safe_text(row["NAMES"]).split()) > 1 else safe_text(row["NAMES"])),
+        ("Surname", surname),
+        ("Given Name", given_name),
         ("Nationality", "INDIAN"),
         ("Date of Birth", safe_text(row["DATE_OF_BIRTH"])),
         ("Place of Birth", safe_text(row["LOCATION"])),
@@ -160,9 +200,11 @@ def create_passport_like_image(row, output_path):
     # Fake MRZ block
     mrz_y = 540
     draw.rectangle([(40, mrz_y), (1160, 650)], outline="black", width=2)
-    surname = safe_text(row["NAMES"]).upper().replace(" ", "<")
+
+    surname_mrz = full_name.upper().replace(" ", "<")
     passport_no = safe_text(row["ID_NUMBER"]).upper().replace(" ", "")
-    mrz_1 = f"P<IND<{surname}".ljust(44, "<")[:44]
+
+    mrz_1 = f"P<IND<{surname_mrz}".ljust(44, "<")[:44]
     mrz_2 = f"{passport_no}".ljust(44, "<")[:44]
 
     draw.text((60, mrz_y + 20), mrz_1, font=get_font(30, bold=False), fill="black")
@@ -171,6 +213,7 @@ def create_passport_like_image(row, output_path):
     draw.text((850, 100), "Type P", font=small_font, fill="gray")
 
     img.save(output_path)
+
 
 def create_excel_like_image(row, output_path):
     img = Image.new("RGB", (IMAGE_WIDTH, IMAGE_HEIGHT), color="white")
@@ -196,39 +239,46 @@ def create_excel_like_image(row, output_path):
         ("DOC_TYPE", safe_text(row["DOC_TYPE"])),
     ]
 
-    # header row
+    # Header row
     draw.rectangle([(table_x, table_y), (table_x + col1, table_y + row_h)], outline="black", width=2)
     draw.rectangle([(table_x + col1, table_y), (table_x + col1 + col2, table_y + row_h)], outline="black", width=2)
     draw.text((table_x + 20, table_y + 20), "FIELD", font=header_font, fill="black")
     draw.text((table_x + col1 + 20, table_y + 20), "VALUE", font=header_font, fill="black")
 
     current_y = table_y + row_h
+
     for field, value in rows:
         draw.rectangle([(table_x, current_y), (table_x + col1, current_y + row_h)], outline="black", width=2)
-        draw.rectangle([(table_x + col1, current_y), (table_x + col1 + col2, current_y + row_h)], outline="black", width=2)
+        draw.rectangle(
+            [(table_x + col1, current_y), (table_x + col1 + col2, current_y + row_h)],
+            outline="black",
+            width=2
+        )
         draw.text((table_x + 20, current_y + 20), field, font=body_font, fill="black")
         draw.text((table_x + col1 + 20, current_y + 20), value[:45], font=body_font, fill="black")
         current_y += row_h
 
     img.save(output_path)
 
+
 # ---------------- MAIN PIPELINE ----------------
 def generate_document_from_row(row, index):
     doc_type = safe_text(row.get("DOC_TYPE", "")).upper()
 
     if doc_type == "AADHAAR":
-        output_path = os.path.join(AADHAAR_DIR, f"aadhaar_like_{index+1}.png")
+        output_path = os.path.join(AADHAAR_DIR, f"aadhaar_like_{index + 1}.png")
         create_aadhaar_like_image(row, output_path)
         return output_path
 
     if doc_type == "PASSPORT":
-        output_path = os.path.join(PASSPORT_DIR, f"passport_like_{index+1}.png")
+        output_path = os.path.join(PASSPORT_DIR, f"passport_like_{index + 1}.png")
         create_passport_like_image(row, output_path)
         return output_path
 
-    output_path = os.path.join(EXCEL_DIR, f"excel_like_{index+1}.png")
+    output_path = os.path.join(EXCEL_DIR, f"excel_like_{index + 1}.png")
     create_excel_like_image(row, output_path)
     return output_path
+
 
 def main():
     ensure_dirs()
@@ -243,9 +293,11 @@ def main():
     print("Synthetic document generation completed.")
     print(f"Total images generated: {len(generated_files)}")
     print(f"Output folder: {OUTPUT_DIR}")
+
     print("\nSample generated files:")
     for file_path in generated_files[:10]:
         print(file_path)
+
 
 if __name__ == "__main__":
     main()
