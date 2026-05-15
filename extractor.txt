@@ -56,94 +56,6 @@ NAME_STOPWORDS = {
     "SYNTHETIC", "TEST", "SAMPLE", "STYLE", "RECORD"
 }
 
-
-# Extra OCR-name cleanup rules.
-# This removes trailing garbage like:
-# CHAUHAN SUKHVIR KAURS K KK -> CHAUHAN SUKHVIR KAUR
-COMMON_NAME_FIXES = {
-    "KAURS": "KAUR",
-    "KAUR5": "KAUR",
-    "KAURI": "KAUR",
-    "SINGH5": "SINGH",
-    "DEEP5": "DEEP",
-    "KAURS": "KAUR",
-}
-
-NAME_NOISE_WORDS = set(NAME_STOPWORDS) | {
-    "PHOTO",
-    "MRZ",
-    "LINE",
-    "HOLDER",
-    "HOLDERS",
-    "FATHERS",
-    "MOTHERS",
-    "SPOUSE",
-    "GUARDIAN",
-    "PERMANENT",
-    "TEMPORARY",
-    "DOCUMENT",
-    "DATEOFISSUE",
-    "DATEOFEXPIRY",
-    "PLACEOFBIRTH",
-    "PLACEOFISSUE",
-}
-
-
-def clean_extracted_name(name):
-    """
-    Final name cleaner used before returning schema.
-    It removes document keywords, repeated OCR tokens, and trailing short garbage.
-    """
-    if not name:
-        return "Not Found"
-
-    raw = str(name).strip()
-
-    if raw.lower() in {"", "nan", "none", "null", "not found"}:
-        return "Not Found"
-
-    raw = raw.upper()
-    raw = raw.replace("\n", " ")
-    raw = raw.replace("|", "I").replace("«", "<")
-    raw = re.sub(r"[^A-Z\s]", " ", raw)
-    raw = re.sub(r"\s+", " ", raw).strip()
-
-    tokens = raw.split()
-    cleaned_tokens = []
-
-    for token in tokens:
-        token = token.strip()
-
-        if not token:
-            continue
-
-        token = COMMON_NAME_FIXES.get(token, token)
-
-        if token in NAME_NOISE_WORDS:
-            continue
-
-        # Remove repeated OCR garbage like KKK, SSS, III.
-        if len(token) > 1 and len(set(token)) == 1:
-            continue
-
-        cleaned_tokens.append(token)
-
-    # Remove trailing short OCR noise after a reasonable name.
-    # Example: CHAUHAN SUKHVIR KAURS K KK -> CHAUHAN SUKHVIR KAUR
-    while len(cleaned_tokens) > 2 and len(cleaned_tokens[-1]) <= 2:
-        cleaned_tokens.pop()
-
-    # Remove leading short OCR noise before a reasonable name.
-    while len(cleaned_tokens) > 2 and len(cleaned_tokens[0]) <= 2:
-        cleaned_tokens.pop(0)
-
-    final_name = " ".join(cleaned_tokens).strip()
-
-    if not final_name:
-        return "Not Found"
-
-    return final_name
-
 AADHAAR_NOISE = {
     "AADHAAR", "AADHAR", "UNIQUE", "IDENTIFICATION", "AUTHORITY",
     "GOVERNMENT", "INDIA", "YOUR", "AAM", "AADMI", "ADHIKAR",
@@ -727,7 +639,7 @@ def extract_synthetic_fields_from_text(full_text):
         return None
 
     return {
-        "NAMES": clean_extracted_name(name_val),
+        "NAMES": name_val,
         "DATE_OF_BIRTH": dob_val,
         "LOCATION": location_val,
         "ID_NUMBER": id_val
@@ -1699,8 +1611,6 @@ def extract_fields(text, pil_image=None):
     if pid in PASSPORT_NAME_MAP:
         data["NAMES"] = PASSPORT_NAME_MAP[pid]
 
-    data["NAMES"] = clean_extracted_name(data["NAMES"])
-
     return data
 
 
@@ -1871,7 +1781,7 @@ def extract_synthetic_fields_from_row(row):
         location_val = normalize_name_line(location_val)
 
     return {
-        "NAMES": clean_extracted_name(name_val) if name_val != "Not Found" else "Not Found",
+        "NAMES": name_val if name_val != "Not Found" else "Not Found",
         "DATE_OF_BIRTH": dob_val,
         "LOCATION": location_val,
         "ID_NUMBER": id_val,

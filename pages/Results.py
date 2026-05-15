@@ -654,7 +654,13 @@ else:
     # ---------------- DOWNLOADS ----------------
     st.markdown("<div class='section-head'>Downloads</div>", unsafe_allow_html=True)
 
-    csv_bytes = output_df.to_csv(index=False).encode("utf-8")
+    output_excel_buffer = io.BytesIO()
+
+    with pd.ExcelWriter(output_excel_buffer, engine="openpyxl") as writer:
+        output_df.to_excel(writer, index=False, sheet_name="KYC_Output")
+
+    output_excel_bytes = output_excel_buffer.getvalue()
+
     validation_csv_bytes = validation_df.to_csv(index=False).encode("utf-8")
 
     excel_buffer = io.BytesIO()
@@ -671,12 +677,12 @@ else:
 
     with d1:
         if st.download_button(
-            "⬇️ Download Output CSV",
-            data=csv_bytes,
-            file_name="kyc_output.csv",
-            mime="text/csv",
+            "⬇️ Download Output Excel",
+            data=output_excel_bytes,
+            file_name="kyc_output.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
-            key="dl_output_csv_btn",
+            key="dl_output_excel_btn",
         ):
             rain(emoji="📄", font_size=16, falling_speed=4, animation_length="1")
 
